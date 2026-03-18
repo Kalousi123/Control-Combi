@@ -248,6 +248,7 @@ function CloseDayModal({ totalIngresosHoy, totalYapeHoy, currentTrips, onClose, 
   })
   
   const [autoCalculate, setAutoCalculate] = useState(true)
+  const [trabajoSolo, setTrabajoSolo] = useState(false)
 
   const handleChange = (e) => {
     const val = e.target.value
@@ -267,20 +268,34 @@ function CloseDayModal({ totalIngresosHoy, totalYapeHoy, currentTrips, onClose, 
   // Efecto para auto calcular porcentajes cuando cambian gastos operativos y está activo el auto:
   useEffect(() => {
     if(autoCalculate && montoLibre > 0) {
-      setFormData(prev => ({
-        ...prev,
-        chofer: (montoLibre * 0.30).toFixed(1), // 30%
-        cobrador: (montoLibre * 0.20).toFixed(1) // 20%
-      }))
+      if(trabajoSolo) {
+        setFormData(prev => ({
+          ...prev,
+          chofer: (montoLibre * 0.50).toFixed(2), // 50% Sueldo Dueño
+          cobrador: '0' // Sin cobrador
+        }))
+      } else {
+        setFormData(prev => ({
+          ...prev,
+          chofer: (montoLibre * 0.30).toFixed(2), // 30%
+          cobrador: (montoLibre * 0.20).toFixed(2) // 20%
+        }))
+      }
     } else if (autoCalculate && montoLibre <= 0) {
       setFormData(prev => ({ ...prev, chofer: '', cobrador: '' }))
     }
-  }, [numIngresos, numGasolina, numAlmuerzo, numTributo, autoCalculate, montoLibre])
+  }, [numIngresos, numGasolina, numAlmuerzo, numTributo, autoCalculate, montoLibre, trabajoSolo])
 
   // Desactivar autocalculate si el usuario edita chofer/cobrador
   const handleManualEdit = (e) => {
     setAutoCalculate(false)
     handleChange(e)
+  }
+
+  // Toggle de modo Trabajo Solo
+  const handleToggleSolo = (e) => {
+    setTrabajoSolo(e.target.checked)
+    setAutoCalculate(true) // Forzar recalculo
   }
 
   const numChofer = Number(formData.chofer || 0)
@@ -361,20 +376,27 @@ function CloseDayModal({ totalIngresosHoy, totalYapeHoy, currentTrips, onClose, 
             </div>
           </div>
 
+          <div className="flex items-center justify-between bg-blue-500/10 p-2.5 rounded-xl border border-blue-500/20 mb-2">
+            <span className="text-[11px] text-blue-300 font-bold uppercase flex items-center gap-2">Trabajé Solo (Sin Chofer ni Cobrador)</span>
+            <input type="checkbox" checked={trabajoSolo} onChange={handleToggleSolo} className="w-4 h-4 rounded text-blue-500 accent-blue-500" />
+          </div>
+
           <div className="flex items-center justify-between bg-slate-800/50 p-2.5 rounded-xl border border-white/5 mb-3">
-            <span className="text-[11px] text-slate-300 font-bold uppercase flex items-center gap-2"><Divide className="w-3.5 h-3.5"/> Forzar 50/30/20</span>
+            <span className="text-[11px] text-slate-300 font-bold uppercase flex items-center gap-2"><Divide className="w-3.5 h-3.5"/> {trabajoSolo ? 'Forzar 50/50' : 'Forzar 50/30/20'}</span>
             <input type="checkbox" checked={autoCalculate} onChange={(e) => setAutoCalculate(e.target.checked)} className="w-4 h-4 rounded text-blue-500 accent-blue-500" />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-             <div className="space-y-1 relative">
-               <label className="text-[11px] text-slate-400 font-medium">Pago Chofer {autoCalculate && '(30%)'}</label>
+             <div className={`space-y-1 relative ${trabajoSolo ? 'col-span-2' : ''}`}>
+               <label className="text-[11px] text-slate-400 font-medium">{trabajoSolo ? `Tu Sueldo (Dueño) ${autoCalculate ? '(50%)' : ''}` : `Pago Chofer ${autoCalculate ? '(30%)' : ''}`}</label>
                <input name="chofer" type="number" value={formData.chofer} onChange={handleManualEdit} className={`w-full bg-slate-900/50 border rounded-xl px-3 py-3 text-white text-sm font-medium transition-all focus:bg-slate-900 ${autoCalculate ? 'border-emerald-500/30 focus:border-emerald-500' : 'border-white/10 focus:border-blue-500'}`} placeholder="0.00" />
              </div>
-             <div className="space-y-1 relative">
-               <label className="text-[11px] text-slate-400 font-medium">Pago Cobrador {autoCalculate && '(20%)'}</label>
-               <input name="cobrador" type="number" value={formData.cobrador} onChange={handleManualEdit} className={`w-full bg-slate-900/50 border rounded-xl px-3 py-3 text-white text-sm font-medium transition-all focus:bg-slate-900 ${autoCalculate ? 'border-emerald-500/30 focus:border-emerald-500' : 'border-white/10 focus:border-blue-500'}`} placeholder="0.00" />
-             </div>
+             {!trabajoSolo && (
+               <div className="space-y-1 relative">
+                 <label className="text-[11px] text-slate-400 font-medium">Pago Cobrador {autoCalculate && '(20%)'}</label>
+                 <input name="cobrador" type="number" value={formData.cobrador} onChange={handleManualEdit} className={`w-full bg-slate-900/50 border rounded-xl px-3 py-3 text-white text-sm font-medium transition-all focus:bg-slate-900 ${autoCalculate ? 'border-emerald-500/30 focus:border-emerald-500' : 'border-white/10 focus:border-blue-500'}`} placeholder="0.00" />
+               </div>
+             )}
           </div>
         </div>
 
@@ -423,32 +445,34 @@ function CloseDayModal({ totalIngresosHoy, totalYapeHoy, currentTrips, onClose, 
 }
 
 function TripForm({ currentTrips, setCurrentTrips, setActiveTab }) {
-  const [ingresos, setIngresos] = useState('')
+  const [efectivo, setEfectivo] = useState('')
   const [yape, setYape] = useState('')
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    if(!ingresos) return alert("Ingresa el monto total recaudado")
+    if(!efectivo && !yape) return alert("Ingresa algún monto en efectivo o en yape")
     
-    // Yape no puede ser mayor que ingresos totales
-    if (Number(yape) > Number(ingresos)) {
-      return alert("El monto de Yape no puede ser mayor a la recaudación total.")
-    }
+    const numEfectivo = Number(efectivo) || 0
+    const numYape = Number(yape) || 0
+    const totalRecaudado = numEfectivo + numYape
     
     const newTrip = {
       id: Date.now().toString(),
       time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-      ingresos: ingresos,
-      yape: yape || 0
+      ingresos: totalRecaudado, // Se mantiene 'ingresos' como total para compatibilidad
+      efectivo: numEfectivo,
+      yape: numYape
     }
     setCurrentTrips([...currentTrips, newTrip])
-    setIngresos('')
+    setEfectivo('')
     setYape('')
   }
 
   const deleteTrip = (id) => {
     setCurrentTrips(currentTrips.filter(t => t.id !== id))
   }
+
+  const totalPreview = (Number(efectivo) || 0) + (Number(yape) || 0)
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -458,25 +482,29 @@ function TripForm({ currentTrips, setCurrentTrips, setActiveTab }) {
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex gap-3 items-end">
             <div className="flex-1 space-y-2">
-              <label className="text-xs text-slate-400 ml-1 font-bold uppercase tracking-wider">Recaudación Total (S/)</label>
+              <label className="text-xs text-emerald-400 ml-1 font-bold uppercase tracking-wider">Monto en Efectivo</label>
               <div className="relative group">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">S/</span>
-                <input type="number" value={ingresos} onChange={(e)=>setIngresos(e.target.value)} className="w-full bg-slate-900/50 border border-white/10 rounded-2xl pl-10 pr-4 py-4 text-white text-lg font-bold outline-none focus:border-blue-500 focus:bg-slate-900 transition-all group-hover:border-white/20" placeholder="0.00" />
+                <input type="number" value={efectivo} onChange={(e)=>setEfectivo(e.target.value)} className="w-full bg-slate-900/50 border border-white/10 rounded-2xl pl-10 pr-4 py-4 text-white text-lg font-bold outline-none focus:border-emerald-500 focus:bg-slate-900 transition-all group-hover:border-emerald-500/30" placeholder="0.00" />
               </div>
             </div>
-          </div>
-          <div className="flex gap-3 items-end">
             <div className="flex-1 space-y-2">
-              <label className="text-xs text-purple-400 ml-1 font-bold uppercase tracking-wider">De esos S/, ¿Cuánto fue Yape?</label>
+              <label className="text-xs text-purple-400 ml-1 font-bold uppercase tracking-wider">Monto en Yape</label>
               <div className="relative group">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">S/</span>
-                <input type="number" value={yape} onChange={(e)=>setYape(e.target.value)} className="w-full bg-purple-900/10 border border-purple-500/20 rounded-2xl pl-10 pr-4 py-4 text-purple-100 text-lg font-bold outline-none focus:border-purple-500 focus:bg-purple-900/20 transition-all group-hover:border-purple-500/30" placeholder="Opcional. Ej: 25.00" />
+                <input type="number" value={yape} onChange={(e)=>setYape(e.target.value)} className="w-full bg-purple-900/10 border border-purple-500/20 rounded-2xl pl-10 pr-4 py-4 text-purple-100 text-lg font-bold outline-none focus:border-purple-500 focus:bg-purple-900/20 transition-all group-hover:border-purple-500/30" placeholder="0.00" />
               </div>
             </div>
-            <button type="submit" className="bg-gradient-to-r from-blue-600 to-indigo-600 p-5 rounded-2xl shadow-lg shadow-blue-500/25 hover:from-blue-500 hover:to-indigo-500 text-white transition-all active:scale-95">
-              <CheckCircle className="w-6 h-6" />
-            </button>
           </div>
+          
+          <div className="flex justify-between items-center bg-slate-900/50 p-3 rounded-2xl border border-white/5">
+             <div className="text-xs text-slate-400 uppercase tracking-widest font-bold">Total de esta vuelta</div>
+             <div className="text-lg font-black text-blue-400">S/ {totalPreview.toFixed(2)}</div>
+          </div>
+
+          <button type="submit" className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 p-4 rounded-2xl shadow-lg shadow-blue-500/25 hover:from-blue-500 hover:to-indigo-500 text-white font-bold tracking-wide transition-all active:scale-[0.98] flex justify-center items-center gap-2 mt-2">
+            <CheckCircle className="w-5 h-5" /> Registrar Vuelta
+          </button>
         </form>
       </div>
 
