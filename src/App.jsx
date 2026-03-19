@@ -108,6 +108,7 @@ function Dashboard({ currentTrips, setCurrentTrips, dailyHistory, setDailyHistor
   // Datos del Día Actual en Curso
   const totalIngresosHoy = currentTrips.reduce((sum, trip) => sum + Number(trip.ingresos), 0)
   const totalYapeHoy = currentTrips.reduce((sum, trip) => sum + Number(trip.yape || 0), 0)
+  const totalGastosVueltasHoy = currentTrips.reduce((sum, trip) => sum + Number(trip.gastoMonto || 0), 0)
   const vueltasDadas = currentTrips.length
 
   // Histórico
@@ -147,6 +148,11 @@ function Dashboard({ currentTrips, setCurrentTrips, dailyHistory, setDailyHistor
                <div className="text-xs text-blue-300/70 font-bold uppercase tracking-wider mb-1">Vueltas Dadas</div>
                <div className="text-3xl font-black text-white">{vueltasDadas}</div>
             </div>
+            {totalGastosVueltasHoy > 0 && (
+               <div className="col-span-2 mt-[-10px]">
+                  <div className="text-[10px] text-orange-300 font-bold uppercase">Gastos Menores en Vueltas: <span className="text-white">S/ {totalGastosVueltasHoy.toFixed(2)}</span></div>
+               </div>
+            )}
          </div>
 
          {vueltasDadas > 0 ? (
@@ -224,6 +230,7 @@ function Dashboard({ currentTrips, setCurrentTrips, dailyHistory, setDailyHistor
         <CloseDayModal 
           totalIngresosHoy={totalIngresosHoy} 
           totalYapeHoy={totalYapeHoy}
+          totalGastosVueltasHoy={totalGastosVueltasHoy}
           currentTrips={currentTrips}
           onClose={() => setShowCloseDayModal(false)}
           onConfirm={(dailyRecord) => {
@@ -238,7 +245,7 @@ function Dashboard({ currentTrips, setCurrentTrips, dailyHistory, setDailyHistor
   )
 }
 
-function CloseDayModal({ totalIngresosHoy, totalYapeHoy, currentTrips, onClose, onConfirm }) {
+function CloseDayModal({ totalIngresosHoy, totalYapeHoy, totalGastosVueltasHoy, currentTrips, onClose, onConfirm }) {
   const [formData, setFormData] = useState({
     gasolina: '',
     almuerzo: '',
@@ -261,9 +268,10 @@ function CloseDayModal({ totalIngresosHoy, totalYapeHoy, currentTrips, onClose, 
   const numGasolina = Number(formData.gasolina || 0)
   const numAlmuerzo = Number(formData.almuerzo || 0)
   const numTributo = Number(formData.tributo || 0)
+  const numGastosVuelta = Number(totalGastosVueltasHoy || 0)
 
   // Monto Libre a Repartir
-  const montoLibre = numIngresos - numGasolina - numAlmuerzo - numTributo
+  const montoLibre = numIngresos - numGasolina - numAlmuerzo - numTributo - numGastosVuelta
 
   // Efecto para auto calcular porcentajes cuando cambian gastos operativos y está activo el auto:
   useEffect(() => {
@@ -312,7 +320,9 @@ function CloseDayModal({ totalIngresosHoy, totalYapeHoy, currentTrips, onClose, 
       date: new Date().toISOString(),
       vueltasMontoTot: totalIngresosHoy,
       totalYape: totalYapeHoy,
+      gastosMenores: totalGastosVueltasHoy,
       vueltasCount: currentTrips.length,
+      vueltas: currentTrips, // Se guarda la lista completa para V5
       gasolina: numGasolina,
       almuerzo: numAlmuerzo,
       tributo: numTributo,
@@ -326,6 +336,9 @@ function CloseDayModal({ totalIngresosHoy, totalYapeHoy, currentTrips, onClose, 
   // Verificar Efectivo Real para el cobro
   // El efectivo que debe darte el cobrador es tu parte (Ganancia Carro) MENOS lo que ya está en tu Yape
   // (Si el Yape es mayor a tu ganancia, significa que DEBES plata o le pagas a tu personal desde Yape)
+  // Nota: Además, el cobrador uso efectivo de la caja para gastos de vueltas menores (GastosVuelta). 
+  // No necesitamos restarlos del efectivo esperado porque el cobrador ya los descontó de la caja común en la calle.
+  // Tu ganancia asume que los gastos de vuelta salieron del total de billetes.
   const efectivoRealParaDueño = gananciaCarroNeta - totalYapeHoy;
 
   return (
@@ -347,7 +360,15 @@ function CloseDayModal({ totalIngresosHoy, totalYapeHoy, currentTrips, onClose, 
 
         {/* Gastos Operativos Diarios */}
         <div>
-          <h3 className="text-xs text-orange-300 font-bold uppercase tracking-wider mb-3 flex items-center gap-1.5"><Fuel className="w-3.5 h-3.5" /> Gastos Operativos (Fijos)</h3>
+          <h3 className="text-xs text-orange-300 font-bold uppercase tracking-wider mb-3 flex items-center gap-1.5"><Fuel className="w-3.5 h-3.5" /> Gastos Operativos</h3>
+          
+          {totalGastosVueltasHoy > 0 && (
+             <div className="mb-3 p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex justify-between items-center text-red-200">
+                <span className="text-[11px] font-bold uppercase">Agua/Comida Gastado en Vueltas</span>
+                <span className="text-sm font-black">- S/ {totalGastosVueltasHoy.toFixed(2)}</span>
+             </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
              <div className="space-y-1">
                <label className="text-[11px] text-slate-400 font-medium">Gasolina / Combustible</label>
@@ -358,7 +379,7 @@ function CloseDayModal({ totalIngresosHoy, totalYapeHoy, currentTrips, onClose, 
                <input name="tributo" type="number" value={formData.tributo} onChange={handleChange} className="w-full bg-slate-900/50 border border-white/10 rounded-xl px-3 py-3 text-white focus:border-orange-500 transition-all text-sm font-medium hover:border-white/20" placeholder="0.00" />
              </div>
              <div className="space-y-1 col-span-2">
-               <label className="text-[11px] text-slate-400 font-medium flex items-center gap-1.5"><Coffee className="w-3.5 h-3.5" /> Almuerzo</label>
+               <label className="text-[11px] text-slate-400 font-medium flex items-center gap-1.5"><Coffee className="w-3.5 h-3.5" /> Almuerzo Chofer/Cobrador</label>
                <input name="almuerzo" type="number" value={formData.almuerzo} onChange={handleChange} className="w-full bg-slate-900/50 border border-white/10 rounded-xl px-3 py-3 text-white focus:border-orange-500 transition-all text-sm font-medium hover:border-white/20" placeholder="0.00" />
              </div>
           </div>
@@ -447,6 +468,8 @@ function CloseDayModal({ totalIngresosHoy, totalYapeHoy, currentTrips, onClose, 
 function TripForm({ currentTrips, setCurrentTrips, setActiveTab }) {
   const [efectivo, setEfectivo] = useState('')
   const [yape, setYape] = useState('')
+  const [gastoMonto, setGastoMonto] = useState('')
+  const [gastoDetalle, setGastoDetalle] = useState('')
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -461,11 +484,15 @@ function TripForm({ currentTrips, setCurrentTrips, setActiveTab }) {
       time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
       ingresos: totalRecaudado, // Se mantiene 'ingresos' como total para compatibilidad
       efectivo: numEfectivo,
-      yape: numYape
+      yape: numYape,
+      gastoMonto: Number(gastoMonto) || 0,
+      gastoDetalle: gastoDetalle
     }
     setCurrentTrips([...currentTrips, newTrip])
     setEfectivo('')
     setYape('')
+    setGastoMonto('')
+    setGastoDetalle('')
   }
 
   const deleteTrip = (id) => {
@@ -497,8 +524,21 @@ function TripForm({ currentTrips, setCurrentTrips, setActiveTab }) {
             </div>
           </div>
           
+          <div className="border border-red-500/20 rounded-2xl p-4 bg-red-900/10 space-y-4">
+             <label className="text-xs text-red-400 font-bold uppercase tracking-wider block">Gastos Menores en esta vuelta (Opcional)</label>
+             <div className="flex gap-3">
+               <div className="w-1/3 relative">
+                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-red-400/50 font-medium text-sm">S/</span>
+                 <input type="number" value={gastoMonto} onChange={(e)=>setGastoMonto(e.target.value)} className="w-full bg-slate-900/50 border border-red-500/20 rounded-xl pl-8 pr-2 py-3 text-red-200 text-sm font-bold outline-none focus:border-red-500 transition-all" placeholder="0.00" />
+               </div>
+               <div className="w-2/3">
+                 <input type="text" value={gastoDetalle} onChange={(e)=>setGastoDetalle(e.target.value)} className="w-full bg-slate-900/50 border border-white/10 rounded-xl px-3 py-3 text-white text-sm outline-none focus:border-red-500 transition-all" placeholder="Ej: Agua y galleta" />
+               </div>
+             </div>
+          </div>
+          
           <div className="flex justify-between items-center bg-slate-900/50 p-3 rounded-2xl border border-white/5">
-             <div className="text-xs text-slate-400 uppercase tracking-widest font-bold">Total de esta vuelta</div>
+             <div className="text-xs text-slate-400 uppercase tracking-widest font-bold">Total Bruto de Vuelta</div>
              <div className="text-lg font-black text-blue-400">S/ {totalPreview.toFixed(2)}</div>
           </div>
 
@@ -521,21 +561,31 @@ function TripForm({ currentTrips, setCurrentTrips, setActiveTab }) {
         ) : (
           <div className="space-y-3">
              {currentTrips.slice().reverse().map((trip, idx) => (
-               <div key={trip.id} className="flex justify-between items-center p-4 rounded-2xl bg-slate-800/60 border border-white/5 relative overflow-hidden">
+               <div key={trip.id} className="flex flex-col p-3 rounded-2xl bg-slate-800/60 border border-white/5 relative overflow-hidden">
                  {Number(trip.yape) > 0 && <div className="absolute left-0 top-0 bottom-0 w-1 bg-purple-500"></div>}
-                 <div className="flex items-center gap-3">
-                   <div className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-xs">
-                     #{currentTrips.length - idx}
-                   </div>
-                   <div>
-                     <div className="text-sm font-bold text-white">S/ {Number(trip.ingresos).toFixed(2)}</div>
-                     <div className="text-[10px] text-slate-400">
-                        {trip.time} 
-                        {Number(trip.yape) > 0 && <span className="text-purple-400 font-semibold ml-2">(S/ {Number(trip.yape).toFixed(2)} en Yape)</span>}
+                 
+                 <div className="flex justify-between items-center pl-1">
+                   <div className="flex items-center gap-3">
+                     <div className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-xs">
+                       #{currentTrips.length - idx}
+                     </div>
+                     <div>
+                       <div className="text-sm font-bold text-white">S/ {Number(trip.ingresos).toFixed(2)}</div>
+                       <div className="text-[10px] text-slate-400">
+                          {trip.time} 
+                          {Number(trip.yape) > 0 && <span className="text-purple-400 font-semibold ml-2">(S/ {Number(trip.yape).toFixed(2)} Yape)</span>}
+                       </div>
                      </div>
                    </div>
+                   <button onClick={() => deleteTrip(trip.id)} className="text-slate-500 hover:text-red-400 p-2">✕</button>
                  </div>
-                 <button onClick={() => deleteTrip(trip.id)} className="text-slate-500 hover:text-red-400 p-2">✕</button>
+
+                 {Number(trip.gastoMonto) > 0 && (
+                   <div className="mt-2 ml-12 bg-red-500/10 border border-red-500/20 rounded-lg p-2 flex justify-between items-center">
+                     <span className="text-[10px] text-red-300 uppercase font-bold">{trip.gastoDetalle || 'Gasto'}</span>
+                     <span className="text-xs font-bold text-red-400">- S/ {Number(trip.gastoMonto).toFixed(2)}</span>
+                   </div>
+                 )}
                </div>
              ))}
           </div>
@@ -546,6 +596,7 @@ function TripForm({ currentTrips, setCurrentTrips, setActiveTab }) {
 }
 
 function HistoryTab({ dailyHistory }) {
+  const [expandedDayId, setExpandedDayId] = useState(null)
   if (dailyHistory.length === 0) {
     return (
       <div className="animate-in fade-in flex flex-col items-center justify-center h-[60vh] text-center">
@@ -563,39 +614,76 @@ function HistoryTab({ dailyHistory }) {
       <div className="space-y-4">
         {dailyHistory.slice().reverse().map((day) => {
           const formattedDate = new Date(day.date).toLocaleDateString('es-ES', { weekday: 'short', month: 'short', day: 'numeric'})
+          const isExpanded = expandedDayId === day.id;
 
           return (
-            <div key={day.id} className="glass-panel rounded-3xl border border-white/5 overflow-hidden">
-               <div className="bg-slate-800/50 p-4 border-b border-white/5 flex justify-between items-center">
+            <div key={day.id} className="glass-panel rounded-3xl border border-white/5 overflow-hidden transition-all duration-300">
+               {/* Resumen del Día (Clickable) */}
+               <div 
+                 onClick={() => setExpandedDayId(isExpanded ? null : day.id)}
+                 className={`p-4 flex justify-between items-center cursor-pointer transition-colors ${isExpanded ? 'bg-slate-700/50 border-b border-white/10' : 'bg-slate-800/50 hover:bg-slate-800/70'}`}
+               >
                  <div className="flex flex-col">
                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{formattedDate}</span>
                    <span className="text-sm font-bold text-slate-200">{day.vueltasCount} vueltas</span>
                  </div>
                  <div className="text-right">
                    <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">Líquido Dueño</span>
-                   <span className="text-lg font-black text-emerald-400 block">S/ {Number(day.gananciaCarro).toFixed(2)}</span>
+                   <div className="flex items-center gap-2 justify-end">
+                      <span className="text-lg font-black text-emerald-400">S/ {Number(day.gananciaCarro).toFixed(2)}</span>
+                      <span className={`text-slate-500 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>▼</span>
+                   </div>
                  </div>
                </div>
                
-               <div className="p-4 grid grid-cols-2 gap-4 bg-slate-800/20">
-                  <div>
-                    <div className="text-[10px] text-slate-500 font-bold uppercase mb-0.5">Ingresos (Bruto)</div>
-                    <div className="text-sm font-bold text-blue-300">S/ {Number(day.vueltasMontoTot).toFixed(2)}</div>
-                    {day.totalYape > 0 && <div className="text-[9px] text-purple-400 font-bold uppercase">Incluye S/ {Number(day.totalYape).toFixed(2)} Yape</div>}
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-slate-500 font-bold uppercase mb-0.5">Gasolina + Almuerzo</div>
-                    <div className="text-sm font-bold text-orange-300">S/ {(Number(day.gasolina) + Number(day.almuerzo)).toFixed(2)}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-slate-500 font-bold uppercase mb-0.5">Chofer</div>
-                    <div className="text-sm font-bold text-slate-300">S/ {Number(day.chofer).toFixed(2)}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-slate-500 font-bold uppercase mb-0.5">Cobrador</div>
-                    <div className="text-sm font-bold text-slate-300">S/ {Number(day.cobrador).toFixed(2)}</div>
-                  </div>
-               </div>
+               {/* Detalles Expandidos */}
+               {isExpanded && (
+                 <div className="animate-in slide-in-from-top-2 fade-in duration-300 origin-top">
+                   <div className="p-4 grid grid-cols-2 gap-4 bg-slate-800/20">
+                      <div>
+                        <div className="text-[10px] text-slate-500 font-bold uppercase mb-0.5">Ingresos (Bruto)</div>
+                        <div className="text-sm font-bold text-blue-300">S/ {Number(day.vueltasMontoTot).toFixed(2)}</div>
+                        {day.totalYape > 0 && <div className="text-[9px] text-purple-400 font-bold uppercase">Yape: S/ {Number(day.totalYape).toFixed(2)}</div>}
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-slate-500 font-bold uppercase mb-0.5">Gastos (Gas + Comida...)</div>
+                        <div className="text-sm font-bold text-orange-300">S/ {(Number(day.gasolina) + Number(day.almuerzo) + Number(day.tributo) + Number(day.gastosMenores || 0)).toFixed(2)}</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-slate-500 font-bold uppercase mb-0.5">Monto Libre Repar.</div>
+                        <div className="text-sm font-bold text-slate-300">S/ {Number(day.montoLibre).toFixed(2)}</div>
+                      </div>
+                      <div className="flex gap-4">
+                        <div>
+                          <div className="text-[10px] text-slate-500 font-bold uppercase mb-0.5">Chofer</div>
+                          <div className="text-sm font-bold text-slate-300">S/ {Number(day.chofer).toFixed(2)}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-slate-500 font-bold uppercase mb-0.5">Cobrador</div>
+                          <div className="text-sm font-bold text-slate-300">S/ {Number(day.cobrador).toFixed(2)}</div>
+                        </div>
+                      </div>
+                   </div>
+
+                   {/* Vueltas List for that day */}
+                   {day.vueltas && day.vueltas.length > 0 && (
+                     <div className="bg-slate-900/50 p-4 border-t border-white/5">
+                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-3">Detalle de Vueltas Registradas</div>
+                        <div className="space-y-2">
+                          {day.vueltas.map((vuelta, i) => (
+                             <div key={vuelta.id} className="flex justify-between items-center text-xs border-b border-white/5 pb-2 last:border-0 last:pb-0">
+                                <span className="text-slate-300 font-medium">#{i+1} - {vuelta.time}</span>
+                                <div className="text-right">
+                                  <span className="text-blue-300 font-bold block">S/ {Number(vuelta.ingresos).toFixed(2)}</span>
+                                  {Number(vuelta.gastoMonto) > 0 && <span className="text-red-400 block text-[9px]">- S/ {Number(vuelta.gastoMonto).toFixed(2)} ({vuelta.gastoDetalle})</span>}
+                                </div>
+                             </div>
+                          ))}
+                        </div>
+                     </div>
+                   )}
+                 </div>
+               )}
             </div>
           )
         })}
