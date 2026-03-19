@@ -468,8 +468,22 @@ function CloseDayModal({ totalIngresosHoy, totalYapeHoy, totalGastosVueltasHoy, 
 function TripForm({ currentTrips, setCurrentTrips, setActiveTab }) {
   const [efectivo, setEfectivo] = useState('')
   const [yape, setYape] = useState('')
-  const [gastoMonto, setGastoMonto] = useState('')
-  const [gastoDetalle, setGastoDetalle] = useState('')
+  const [gastosExtras, setGastosExtras] = useState([{ monto: '', detalle: '' }])
+
+  const addGastoExtra = (e) => {
+    e.preventDefault()
+    setGastosExtras([...gastosExtras, { monto: '', detalle: '' }])
+  }
+
+  const removeGastoExtra = (index) => {
+    setGastosExtras(gastosExtras.filter((_, i) => i !== index))
+  }
+
+  const handleGastoChange = (index, field, value) => {
+    const newGastos = [...gastosExtras]
+    newGastos[index][field] = value
+    setGastosExtras(newGastos)
+  }
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -479,20 +493,23 @@ function TripForm({ currentTrips, setCurrentTrips, setActiveTab }) {
     const numYape = Number(yape) || 0
     const totalRecaudado = numEfectivo + numYape
     
+    const validGastos = gastosExtras.filter(g => Number(g.monto) > 0)
+    const totalGastosExtras = validGastos.reduce((sum, g) => sum + Number(g.monto), 0)
+    const detalleGastosExtras = validGastos.map(g => g.detalle || 'Gasto').join(' + ')
+
     const newTrip = {
       id: Date.now().toString(),
       time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
       ingresos: totalRecaudado, // Se mantiene 'ingresos' como total para compatibilidad
       efectivo: numEfectivo,
       yape: numYape,
-      gastoMonto: Number(gastoMonto) || 0,
-      gastoDetalle: gastoDetalle
+      gastoMonto: totalGastosExtras,
+      gastoDetalle: detalleGastosExtras
     }
     setCurrentTrips([...currentTrips, newTrip])
     setEfectivo('')
     setYape('')
-    setGastoMonto('')
-    setGastoDetalle('')
+    setGastosExtras([{ monto: '', detalle: '' }])
   }
 
   const deleteTrip = (id) => {
@@ -524,17 +541,28 @@ function TripForm({ currentTrips, setCurrentTrips, setActiveTab }) {
             </div>
           </div>
           
-          <div className="border border-red-500/20 rounded-2xl p-4 bg-red-900/10 space-y-4">
-             <label className="text-xs text-red-400 font-bold uppercase tracking-wider block">Gastos Menores en esta vuelta (Opcional)</label>
-             <div className="flex gap-3">
-               <div className="w-1/3 relative">
-                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-red-400/50 font-medium text-sm">S/</span>
-                 <input type="number" value={gastoMonto} onChange={(e)=>setGastoMonto(e.target.value)} className="w-full bg-slate-900/50 border border-red-500/20 rounded-xl pl-8 pr-2 py-3 text-red-200 text-sm font-bold outline-none focus:border-red-500 transition-all" placeholder="0.00" />
-               </div>
-               <div className="w-2/3">
-                 <input type="text" value={gastoDetalle} onChange={(e)=>setGastoDetalle(e.target.value)} className="w-full bg-slate-900/50 border border-white/10 rounded-xl px-3 py-3 text-white text-sm outline-none focus:border-red-500 transition-all" placeholder="Ej: Agua y galleta" />
-               </div>
+          <div className="border border-red-500/20 rounded-2xl p-4 bg-red-900/10 space-y-3 shadow-inner relative">
+             <div className="flex justify-between items-center">
+               <label className="text-xs text-red-400 font-bold uppercase tracking-wider block">Gastos Menores en esta vuelta</label>
+               <button type="button" onClick={addGastoExtra} className="text-xs bg-red-500/20 text-red-300 px-3 py-1 rounded-full font-bold hover:bg-red-500/30 transition-all active:scale-95">
+                 + Añadir otro
+               </button>
              </div>
+             
+             {gastosExtras.map((gasto, idx) => (
+               <div key={idx} className="flex gap-2 items-center animate-in fade-in slide-in-from-top-2 duration-300">
+                 <div className="w-1/3 relative">
+                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-red-400/50 font-medium text-sm">S/</span>
+                   <input type="number" value={gasto.monto} onChange={(e)=>handleGastoChange(idx, 'monto', e.target.value)} className="w-full bg-slate-900/50 border border-red-500/20 rounded-xl pl-8 pr-2 py-3 text-red-200 text-sm font-bold outline-none focus:border-red-500 transition-all" placeholder="0.00" />
+                 </div>
+                 <div className="flex-1 relative">
+                   <input type="text" value={gasto.detalle} onChange={(e)=>handleGastoChange(idx, 'detalle', e.target.value)} className="w-full bg-slate-900/50 border border-white/10 rounded-xl px-3 py-3 text-white text-sm outline-none focus:border-red-500 transition-all pr-8" placeholder="Ej: Agua y galleta" />
+                   {gastosExtras.length > 1 && (
+                     <button type="button" onClick={() => removeGastoExtra(idx)} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-red-400 p-1">✕</button>
+                   )}
+                 </div>
+               </div>
+             ))}
           </div>
           
           <div className="flex justify-between items-center bg-slate-900/50 p-3 rounded-2xl border border-white/5">
